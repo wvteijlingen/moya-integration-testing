@@ -1,3 +1,14 @@
+<p align="center">
+  <a href="https://codecov.io/gh/wvteijlingen/moya-integration-testing">
+    <img src="https://codecov.io/gh/wvteijlingen/moya-integration-testing/branch/master/graph/badge.svg" />
+  </a>
+</p>
+<p align="center">
+  • <a href="#usage">Usage</a>
+  • <a href="#setup">Setup</a>
+  • <a href="#convenience-assertions">Convenience assertions</a>
+</p>
+
 # moya-integration-testing
 
 A Moya plugin for easy integration testing of your Moya network requests.
@@ -36,7 +47,7 @@ func testFetchPosts() {
 ## Setup
 
 1. Use an instance of `MoyaIntegrationTester` as the last plugin in your `MoyaProvider`.
-2. Pass the  `endpointClosure` function from the same `MoyaIntegrationTester` instance to the Moya provider.
+2. Pass the `endpointClosure` function from the same `MoyaIntegrationTester` instance to the Moya provider.
 3. Enable stubbing on the Moya provider.
 
 ```swift
