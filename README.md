@@ -4,7 +4,7 @@
   </a>
 </p>
 <p align="center">
-  • <a href="#usage">Usage</a>
+    <a href="#usage">Usage</a>
   • <a href="#setup">Setup</a>
   • <a href="#convenience-assertions">Convenience assertions</a>
 </p>
