@@ -39,6 +39,11 @@ final class MoyaIntegrationTesterTests: InterceptingTestCase {
         matchingEndpoint.assertWasRequested { request in
             XCTAssertEqual(request, target.request)
         }
+
+        matchingEndpoint.assertWasRequested(count: 1)
+
+        let failures = interceptFailures(matchingEndpoint.assertWasNotRequested())
+        XCTAssertFalse(failures.isEmpty)
     }
 
     func test_willSend_doesNotMatchOtherEndpoints() throws {
@@ -64,6 +69,12 @@ final class MoyaIntegrationTesterTests: InterceptingTestCase {
         for endpoint in nonMatchingEndpoints {
             XCTAssertFalse(endpoint.recordedRequests.contains(target.request))
             endpoint.assertWasNotRequested()
+
+            var failures = interceptFailures(endpoint.assertWasRequested())
+            XCTAssertFalse(failures.isEmpty)
+
+            failures = interceptFailures(endpoint.assertWasRequested(count: 1))
+            XCTAssertFalse(failures.isEmpty)
         }
     }
 
