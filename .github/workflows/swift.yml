@@ -1,0 +1,24 @@
+name: Swift
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build:
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_11.5.app/Contents/Developer
+      CODECOV_TOKEN: 7f949923-5ee1-460a-84c1-f40e428f14ec
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test --enable-code-coverage
+      - name: Codecov
+        run: |
+          xcrun llvm-cov export -format="lcov" .build/debug/MoyaIntegrationTestingPackageTests.xctest/Contents/MacOS/MoyaIntegrationTestingPackageTests -instr-profile .build/debug/codecov/default.profdata --ignore-filename-regex "Tests/.*" > info.lcov
+          bash <(curl -s https://codecov.io/bash)
