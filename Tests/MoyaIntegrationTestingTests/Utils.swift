@@ -41,3 +41,37 @@ struct MoyaTarget: TargetType {
         MoyaRequest(request)
     }
 }
+
+enum TestTarget: TargetType {
+    case foo
+    case bar
+
+    var baseURL: URL {
+        URL(string: "https://example.com")!
+    }
+
+    var path: String {
+        switch self {
+        case .foo:
+            return "foo"
+        case .bar:
+            return "bar"
+        }
+    }
+
+    var method: Moya.Method {
+        .get
+    }
+
+    var sampleData: Data {
+        Data()
+    }
+
+    var task: Task {
+        .requestPlain
+    }
+
+    var headers: [String: String]? {
+        nil
+    }
+}

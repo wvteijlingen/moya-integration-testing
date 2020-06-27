@@ -2,58 +2,38 @@ import Foundation
 import XCTest
 import Moya
 
-/// A Moya plugin that can be used to run integration tests for network requests going through Moya.
-///
-/// # Setup
-/// Use an instance of `MoyaIntegrationTester` as the last plugin in your `MoyaProvider`.
-/// Use the `endpointClosure` from the same `MoyaTester` instance as the `endpointClosure` of the `MoyaProvider`.
-/// You must also enable stubbing on the provider.
-///
-/// ```
-/// let tester = MoyaIntegrationTester()
-/// let provider = MoyaProvider(
-///    endpointClosure: tester.endpointClosure,
-///    stubClosure: MoyaProvider.immediatelyStub,
-///    plugins: [tester]
-/// )
-/// ```
-///
-/// # Usage
-/// First configure your stubbed endpoints and the response the return when requested by your code.
-/// Then you execute the code that is under test. Finally you can use the assertion methods on the stubbed endpoints
-/// to assert that all they were requested, and to inspect the actual requests made to them.
-///
-/// ```
-/// // Configure stubs for each endpoint that your code should request.
-/// let endpoint = responseStubber.stub("https://example.com/posts", method: "GET", statusCode: 200, body: #"[]"#)
-///
-/// // Execute the code under test.
-/// testSubject.fetchPosts()
-///
-/// // Assert that "https://example.com/posts" was actually requested by your code.
-/// endpoint.assertWasRequested(with: { request in
-///     // Optionally assert that the request for "/posts" was as expected.
-///     AssertHeaderEqual(request, "Authorization", "Bearer secret-token")
-/// }
-/// ```
 public class MoyaIntegrationTester {
     private var endpointStubs: [EndpointStub] = []
 
     func endpointClosure<T: TargetType>(for target: T) -> Endpoint {
         let urlString = URL(target: target).absoluteString
 
-        guard let stub = stub(for: urlString, httpMethod: target.method.rawValue) else {
-            XCTFail("Unexpected request for \(target.method) \(urlString)")
-            fatalError()
-        }
+        if let stub = stub(for: urlString, httpMethod: target.method.rawValue) {
+            return Endpoint(
+                url: URL(target: target).absoluteString,
+                sampleResponseClosure: { stub.response },
+                method: target.method,
+                task: target.task,
+                httpHeaderFields: target.headers
+            )
+        } else {
+            // Even though we fail the test, we still have to return an Endpoint here.
+            XCTFail("Unexpected request for \(target.method.rawValue) \(urlString)")
 
-        return Endpoint(
-            url: URL(target: target).absoluteString,
-            sampleResponseClosure: { stub.response },
-            method: target.method,
-            task: target.task,
-            httpHeaderFields: target.headers
-       )
+            return Endpoint(
+                url: URL(target: target).absoluteString,
+                sampleResponseClosure: {
+                    .networkError(NSError(
+                        domain: NSURLErrorDomain,
+                        code: NSURLErrorUnknown,
+                        userInfo: nil
+                    ))
+                },
+                method: target.method,
+                task: target.task,
+                httpHeaderFields: target.headers
+            )
+        }
     }
 
     /// Configures a stub response for the given `url`.
@@ -221,11 +201,15 @@ public class EndpointStub {
     }
 }
 
+// MARK: - Errors
+
 public enum Error: Swift.Error {
     case endpointAlreadyStubbed
     case invalidEndpointURL
     case invalidBody
 }
+
+// MARK: - Convenience assertions
 
 /// Asserts that the given `request` contains an HTTP header with the given `key` and `value`.
 /// - Parameters:
