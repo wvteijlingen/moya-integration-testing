@@ -5,33 +5,38 @@ import Moya
 public class MoyaIntegrationTester {
     private var endpointStubs: [EndpointStub] = []
 
-    func endpointClosure<T: TargetType>(for target: T) -> Endpoint {
-        let urlString = URL(target: target).absoluteString
+    /// Returns an endpointClosure that you must use for the MoyaProvider you want to test.
+    ///
+    /// If your normal setup already uses a custom EndpointClosure, you can pass that to the `originalClosure` param.
+    /// MoyaIntegrationTester will then first call your custom EndpointClosure, and then modify it to return a sample
+    /// response.
+    /// - Parameter originalClosure: Optional original EndpointClosure that your normal MoyaProvider setup uses.
+    /// - Returns: MoyaProvider.EndpointClosure
+    func endpointClosure<T: TargetType>(
+        wrapping originalClosure: @escaping MoyaProvider<T>.EndpointClosure = MoyaProvider.defaultEndpointMapping
+    ) -> MoyaProvider<T>.EndpointClosure {
+        { target in
+            // Default sample response.
+            var sampleResponse: EndpointSampleResponse = .networkError(NSError(
+                domain: NSURLErrorDomain,
+                code: NSURLErrorUnknown,
+                userInfo: nil
+            ))
 
-        if let stub = stub(for: urlString, httpMethod: target.method.rawValue) {
-            return Endpoint(
-                url: URL(target: target).absoluteString,
-                sampleResponseClosure: { stub.response },
-                method: target.method,
-                task: target.task,
-                httpHeaderFields: target.headers
-            )
-        } else {
-            // Even though we fail the test, we still have to return an Endpoint here.
-            XCTFail("Unexpected request for \(target.method.rawValue) \(urlString)")
+            let defaultEndpoint = originalClosure(target)
+
+            if let request = try? defaultEndpoint.urlRequest(), let urlString = request.url?.absoluteString {
+                if let stub = self.stub(for: urlString, httpMethod: target.method.rawValue) {
+                    sampleResponse = stub.response
+                }
+            }
 
             return Endpoint(
-                url: URL(target: target).absoluteString,
-                sampleResponseClosure: {
-                    .networkError(NSError(
-                        domain: NSURLErrorDomain,
-                        code: NSURLErrorUnknown,
-                        userInfo: nil
-                    ))
-                },
-                method: target.method,
-                task: target.task,
-                httpHeaderFields: target.headers
+                url: defaultEndpoint.url,
+                sampleResponseClosure: { sampleResponse },
+                method: defaultEndpoint.method,
+                task: defaultEndpoint.task,
+                httpHeaderFields: defaultEndpoint.httpHeaderFields
             )
         }
     }
@@ -44,7 +49,13 @@ public class MoyaIntegrationTester {
     ///   - body: The HTTP body to use for the response.
     /// - Throws: MoyaTester.Error
     /// - Returns: A stubbed endpoint.
-    func stub(_ url: String, method: String, statusCode: Int, body: Data = Data()) throws -> EndpointStub {
+    @discardableResult
+    func stub(
+        _ url: String,
+        method: String,
+        statusCode: Int,
+        body: Data = Data()
+    ) throws -> EndpointStub {
         guard stub(for: url, httpMethod: method) == nil else {
             throw Error.endpointAlreadyStubbed
         }
@@ -69,6 +80,7 @@ public class MoyaIntegrationTester {
     ///   - encoding: The encoding to use for the HTTP body. Defaults to utf8.
     /// - Throws: MoyaTester.Error
     /// - Returns: A stubbed endpoint.
+    @discardableResult
     func stub(
         _ url: String,
         method: String,
@@ -84,7 +96,7 @@ public class MoyaIntegrationTester {
     }
 
     private func stub(for url: String, httpMethod: String) -> EndpointStub? {
-        return endpointStubs.first { $0.matches(url: url, httpMethod: httpMethod) }
+        endpointStubs.first { $0.matches(url: url, httpMethod: httpMethod) }
     }
 }
 
@@ -94,9 +106,13 @@ extension MoyaIntegrationTester: PluginType {
         guard
             let urlRequest = request.request,
             let url = urlRequest.url,
-            let httpMethod = urlRequest.httpMethod,
-            let stub = self.stub(for: url.absoluteString, httpMethod: httpMethod)
+            let httpMethod = urlRequest.httpMethod
         else {
+            return
+        }
+
+        guard let stub = self.stub(for: url.absoluteString, httpMethod: httpMethod) else {
+            XCTFail("Unexpected request for \(httpMethod) \(url)")
             return
         }
 
@@ -104,9 +120,10 @@ extension MoyaIntegrationTester: PluginType {
     }
 }
 
+/// A stubbed endpoint. You can use this instance to assert if the endpoint was called by your code.
 public class EndpointStub {
-    fileprivate let httpMethod: String
-    fileprivate let components: URLComponents
+    private let httpMethod: String
+    private let components: URLComponents
     fileprivate let response: EndpointSampleResponse
 
     /// All requests that are made to this endpoint.
@@ -191,7 +208,7 @@ public class EndpointStub {
         guard requestComponents.port == components.port else { return false }
         guard requestComponents.path == components.path else { return false }
         guard requestComponents.fragment == components.fragment else { return false }
-        guard Set(requestComponents.queryItems ?? []) == Set(components.queryItems ?? []) else { return false}
+        guard Set(requestComponents.queryItems ?? []) == Set(components.queryItems ?? []) else { return false }
 
         return true
     }

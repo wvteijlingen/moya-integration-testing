@@ -4,7 +4,8 @@ import Moya
 
 final class IntegrationTests: XCTestCase {
     static var allTests = [
-        "test_integrationWithMoyaProvider": test_integrationWithMoyaProvider,
+        "test_integration": test_integration,
+        "test_integrationWithCustomEndpointClosure": test_integrationWithCustomEndpointClosure,
     ]
 
     private var tester: MoyaIntegrationTester!
@@ -14,9 +15,9 @@ final class IntegrationTests: XCTestCase {
         tester = MoyaIntegrationTester()
     }
     
-    func test_integrationWithMoyaProvider() throws {
+    func test_integration() throws {
         let provider = MoyaProvider<TestTarget>(
-            endpointClosure: tester.endpointClosure,
+            endpointClosure: tester.endpointClosure(),
             stubClosure: MoyaProvider.immediatelyStub,
             plugins: [tester]
         )
@@ -39,5 +40,36 @@ final class IntegrationTests: XCTestCase {
         }
 
         fooEndpoint.assertWasRequested()
+    }
+
+    func test_integrationWithCustomEndpointClosure() throws {
+        var didCallOriginalEndpointClosure = false
+
+        let originalEndpointClosure: MoyaProvider<TestTarget>.EndpointClosure = { target in
+            didCallOriginalEndpointClosure = true
+
+            let defaultEndpoint = MoyaProvider.defaultEndpointMapping(for: target)
+            return defaultEndpoint.adding(newHTTPHeaderFields: ["customizedHeader": "value"])
+        }
+
+        let provider = MoyaProvider<TestTarget>(
+            endpointClosure: tester.endpointClosure(wrapping: originalEndpointClosure),
+            stubClosure: MoyaProvider.immediatelyStub,
+            plugins: [tester]
+        )
+
+        let fooEndpoint = try tester.stub(
+            "https://example.com/foo",
+            method: "GET",
+            statusCode: 200
+        )
+
+        provider.request(.foo, completion: { _ in })
+
+        fooEndpoint.assertWasRequested() { request in
+            AssertHeaderEqual(request, key: "customizedHeader", value: "value")
+        }
+
+        XCTAssertTrue(didCallOriginalEndpointClosure)
     }
 }

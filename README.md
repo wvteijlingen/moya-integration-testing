@@ -55,11 +55,14 @@ import MoyaIntegrationTesting
 
 let tester = MoyaIntegrationTester()
 let provider = MoyaProvider(
-   endpointClosure: tester.endpointClosure,
+   endpointClosure: tester.endpointClosure(),
    stubClosure: MoyaProvider.immediatelyStub,
    plugins: [tester]
 )
 ```
+
+If your original Moya setup already uses a custom `EndpointClosure`,
+you need to use `tester.endpointClosure(wrapping: yourOriginalClosure)` so that your custom closure is still called.
 
 ## Convenience assertions
 
