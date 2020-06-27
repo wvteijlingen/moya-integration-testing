@@ -56,19 +56,7 @@ public class MoyaIntegrationTester {
         statusCode: Int,
         body: Data = Data()
     ) throws -> EndpointStub {
-        guard stub(for: url, httpMethod: method) == nil else {
-            throw Error.endpointAlreadyStubbed
-        }
-
-        let stub = try EndpointStub(
-            httpMethod: method,
-            url: url,
-            response: EndpointSampleResponse.networkResponse(statusCode, body)
-        )
-
-        endpointStubs.append(stub)
-
-        return stub
+        return try stub(url, method: method, response: .networkResponse(statusCode, body))
     }
 
     /// Configures a stub response for the given `url`.
@@ -92,7 +80,43 @@ public class MoyaIntegrationTester {
             throw Error.invalidBody
         }
 
-        return try stub(url, method: method, statusCode: statusCode, body: bodyData)
+        return try stub(url, method: method, response: .networkResponse(statusCode, bodyData))
+    }
+
+    /// Configures a stub that simulates the given `networkError`.
+    /// - Parameters:
+    ///   - url: The url to configure the stub for. Query items do not have to in any particular order.
+    ///   - method: The HTTP method to configure the stub for.
+    ///   - networkError: The network error to simulate.
+    /// - Throws: MoyaTester.Error
+    /// - Returns: A stubbed endpoint.
+    @discardableResult
+    func stub(
+        _ url: String,
+        method: String,
+        networkError: NSError
+    ) throws -> EndpointStub {
+        return try stub(url, method: method, response: .networkError(networkError))
+    }
+
+    private func stub(
+        _ url: String,
+        method: String,
+        response: EndpointSampleResponse
+    ) throws -> EndpointStub {
+        guard stub(for: url, httpMethod: method) == nil else {
+            throw Error.endpointAlreadyStubbed
+        }
+
+        let stub = try EndpointStub(
+            httpMethod: method,
+            url: url,
+            response: response
+        )
+
+        endpointStubs.append(stub)
+
+        return stub
     }
 
     private func stub(for url: String, httpMethod: String) -> EndpointStub? {

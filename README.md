@@ -36,7 +36,7 @@ func testFetchPosts() {
     postsEndpoint.assertWasRequested(with: { request in
         // Optionally we can use a callback to assert that the request was as expected.
         AssertHeaderEqual(request, "Authorization", "Bearer secret-token")
-    }
+    })
 
     // You can also assert that an endpoint was requested multiple times, or not at all:
     stubbedEndpoint.assertWasRequested(count: 2)

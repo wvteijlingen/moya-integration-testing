@@ -7,7 +7,8 @@ final class MoyaIntegrationTesterTests: InterceptingTestCase {
         "test_willSend_matchesCorrectEndpoint": test_willSend_matchesCorrectEndpoint,
         "test_willSend_doesNotMatchOtherEndpoints": test_willSend_doesNotMatchOtherEndpoints,
         "test_endpointClosure_returnsSampleResponse": test_endpointClosure_returnsSampleResponse,
-        "test_willSend_assertsFailureOnNonStubbedRequest": test_willSend_assertsFailureOnNonStubbedRequest
+        "test_willSend_assertsFailureOnNonStubbedRequest": test_willSend_assertsFailureOnNonStubbedRequest,
+        "test_endpointClosure_returnsNetworkError": test_endpointClosure_returnsNetworkError
     ]
     
     private var tester: MoyaIntegrationTester!
@@ -125,16 +126,31 @@ final class MoyaIntegrationTesterTests: InterceptingTestCase {
         }
     }
 
-//    func test_endpointClosure_assertsFailureOnNonStubbedRequest() throws {
-//        let target = MoyaTarget(
-//           baseURL: URL(string: "https://example.com")!,
-//           path: "endpointThatIsNotStubbed",
-//           method: .get
-//        )
-//
-//        let failures = interceptFailures(_ = endpointClosure(target).sampleResponseClosure())
-//        XCTAssertEqual(failures[0], "Unexpected request for GET https://example.com/endpointThatIsNotStubbed")
-//    }
+    func test_endpointClosure_returnsNetworkError() throws {
+        let simulatedError = NSError(domain: NSURLErrorDomain, code: NSURLErrorCannotFindHost, userInfo: nil)
+
+        try tester.stub(
+            "https://example.com/users",
+            method: "GET",
+            networkError: simulatedError
+        )
+
+        let target = MoyaTarget(
+           baseURL: URL(string: "https://example.com")!,
+           path: "users",
+           method: .get
+        )
+
+        let response = endpointClosure(target).sampleResponseClosure()
+
+        switch response {
+        case .networkError(let error):
+            XCTAssertEqual(error, simulatedError)
+        default:
+            XCTFail()
+        }
+    }
+
 
     // MARK: - stub
 
