@@ -121,7 +121,11 @@ final class MoyaIntegrationTesterTests: InterceptingTestCase {
     func test_stub_throwsErrorOnDuplicateStubs() throws {
         _ = try tester.stub("https://example.com/foo", method: "GET", statusCode: 200)
 
-        XCTAssertThrowsError(_ = try tester.stub("https://example.com/foo", method: "GET", statusCode: 200)) { error in
+        XCTAssertThrowsError(_ = try tester.stub(
+            "https://example.com/foo",
+            method: "GET",
+            statusCode: 200
+        )) { error in
             switch error {
             case MoyaIntegrationTesting.Error.endpointAlreadyStubbed: ()
             default:
@@ -131,9 +135,29 @@ final class MoyaIntegrationTesterTests: InterceptingTestCase {
     }
 
     func test_stub_throwsErrorOnInvalidURL() {
-        XCTAssertThrowsError(_ = try tester.stub("   ", method: "GET", statusCode: 200)) { error in
+        XCTAssertThrowsError(_ = try tester.stub(
+            "   ",
+            method: "GET",
+            statusCode: 200
+        )) { error in
             switch error {
             case MoyaIntegrationTesting.Error.invalidEndpointURL: ()
+            default:
+                XCTFail("Expected error to be .invalidEndpointURL")
+            }
+        }
+    }
+
+    func test_stub_throwsErrorOnInvalidBody() {
+        XCTAssertThrowsError(_ = try tester.stub(
+            "https://example.com/foo",
+            method: "GET",
+            statusCode: 200,
+            body: "Süßigkeiten",
+            encoding: .ascii
+        )) { error in
+            switch error {
+            case MoyaIntegrationTesting.Error.invalidBody: ()
             default:
                 XCTFail("Expected error to be .invalidEndpointURL")
             }
