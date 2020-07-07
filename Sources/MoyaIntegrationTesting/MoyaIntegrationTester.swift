@@ -27,7 +27,7 @@ public class MoyaIntegrationTester {
 
             if let request = try? defaultEndpoint.urlRequest(), let urlString = request.url?.absoluteString {
                 if let stub = self.stub(for: urlString, httpMethod: target.method.rawValue) {
-                    sampleResponse = stub.response
+                    sampleResponse = stub.response(for: request)
                 }
             }
 
@@ -39,24 +39,6 @@ public class MoyaIntegrationTester {
                 httpHeaderFields: defaultEndpoint.httpHeaderFields
             )
         }
-    }
-
-    /// Configures a stub response for the given `url`.
-    /// - Parameters:
-    ///   - url: The url to configure the stub for.
-    ///   - method: The HTTP method to configure the stub for.
-    ///   - statusCode: The HTTP status code to use for the response.
-    ///   - body: The HTTP body to use for the response.
-    /// - Throws: MoyaTester.Error
-    /// - Returns: A stubbed endpoint.
-    @discardableResult
-    func stub(
-        _ url: String,
-        method: String,
-        statusCode: Int,
-        body: Data = Data()
-    ) throws -> EndpointStub {
-        return try stub(url, method: method, response: .networkResponse(statusCode, body))
     }
 
     /// Configures a stub response for the given `url`.
@@ -80,39 +62,51 @@ public class MoyaIntegrationTester {
             throw Error.invalidBody
         }
 
-        return try stub(url, method: method, response: .networkResponse(statusCode, bodyData))
+        return try stub(url, method: method, statusCode: statusCode, body: bodyData)
     }
 
-    /// Configures a stub that simulates the given `networkError`.
+    /// Configures a stub response for the given `url`.
     /// - Parameters:
-    ///   - url: The url to configure the stub for. Query items do not have to in any particular order.
+    ///   - url: The url to configure the stub for.
     ///   - method: The HTTP method to configure the stub for.
-    ///   - networkError: The network error to simulate.
+    ///   - statusCode: The HTTP status code to use for the response.
+    ///   - body: The HTTP body to use for the response.
     /// - Throws: MoyaTester.Error
     /// - Returns: A stubbed endpoint.
     @discardableResult
     func stub(
         _ url: String,
         method: String,
-        networkError: NSError
+        statusCode: Int,
+        body: Data = Data()
     ) throws -> EndpointStub {
-        return try stub(url, method: method, response: .networkError(networkError))
+        try stub(url, method: method) { _ in
+            EndpointSampleResponse.networkResponse(statusCode, body)
+        }
     }
 
-    private func stub(
+    /// Configures a stub response for the given `url`.
+    ///
+    /// This function provides complete control over the creation of the response. If you do not need that,
+    /// it is often easier to use one of the convenience stubbing methods.
+    ///
+    /// - Parameters:
+    ///   - url: The url to configure the stub for.
+    ///   - method: The HTTP method to configure the stub for.
+    ///   - handler: A handler that receives the url request and returns a sample response.
+    /// - Throws: MoyaTester.Error
+    /// - Returns: A stubbed endpoint.
+    @discardableResult
+    func stub(
         _ url: String,
         method: String,
-        response: EndpointSampleResponse
+        handler: @escaping (URLRequest) -> EndpointSampleResponse
     ) throws -> EndpointStub {
         guard stub(for: url, httpMethod: method) == nil else {
             throw Error.endpointAlreadyStubbed
         }
 
-        let stub = try EndpointStub(
-            httpMethod: method,
-            url: url,
-            response: response
-        )
+        let stub = try EndpointStub(httpMethod: method, url: url, handler: handler)
 
         endpointStubs.append(stub)
 
@@ -124,43 +118,23 @@ public class MoyaIntegrationTester {
     }
 }
 
-extension MoyaIntegrationTester: PluginType {
-    /// Implementation of `Moya.PluginType`. You should not not call this method yourself.
-    public func willSend(_ request: RequestType, target: TargetType) {
-        guard
-            let urlRequest = request.request,
-            let url = urlRequest.url,
-            let httpMethod = urlRequest.httpMethod
-        else {
-            return
-        }
-
-        guard let stub = self.stub(for: url.absoluteString, httpMethod: httpMethod) else {
-            XCTFail("Unexpected request for \(httpMethod) \(url)")
-            return
-        }
-
-        stub.record(request: urlRequest)
-    }
-}
-
 /// A stubbed endpoint. You can use this instance to assert if the endpoint was called by your code.
 public class EndpointStub {
     private let httpMethod: String
     private let components: URLComponents
-    fileprivate let response: EndpointSampleResponse
+    private let handler: (URLRequest) -> EndpointSampleResponse
 
     /// All requests that are made to this endpoint.
     private(set) var recordedRequests: [URLRequest] = []
 
-    init(httpMethod: String, url: String, response: EndpointSampleResponse) throws {
+    init(httpMethod: String, url: String, handler: @escaping (URLRequest) -> EndpointSampleResponse) throws {
         guard let components = URLComponents(string: url) else {
             throw Error.invalidEndpointURL
         }
 
         self.httpMethod = httpMethod.uppercased()
         self.components = components
-        self.response = response
+        self.handler = handler
     }
 
     /// Asserts that the endpoint was requested once.
@@ -171,8 +145,8 @@ public class EndpointStub {
     func assertWasRequested(
         file: StaticString = #file,
         line: UInt = #line,
-        with inspector: ((_ request: URLRequest) -> Void)? = nil
-    ) {
+        with inspector: ((_ request: URLRequest) throws -> Void)? = nil
+    ) rethrows {
         if recordedRequests.count != 1 {
             XCTFail(
                 "Expected endpoint to be requested 1 time, but it was requested \(recordedRequests.count) times",
@@ -182,7 +156,7 @@ public class EndpointStub {
             return
         }
 
-        inspector?(recordedRequests[0])
+        try inspector?(recordedRequests[0])
     }
 
     /// Asserts that the endpoint was requested a specific number of times.
@@ -195,8 +169,8 @@ public class EndpointStub {
         count: Int,
         file: StaticString = #file,
         line: UInt = #line,
-        with inspector: ((_ requests: [URLRequest]) -> Void)? = nil
-    ) {
+        with inspector: ((_ requests: [URLRequest]) throws -> Void)? = nil
+    ) rethrows {
         if recordedRequests.count != count {
             XCTFail(
                 "Expected endpoint to be requested \(count) times, but it was requested \(recordedRequests.count) times",
@@ -205,7 +179,7 @@ public class EndpointStub {
             )
         }
 
-        inspector?(recordedRequests)
+        try inspector?(recordedRequests)
     }
 
     /// Asserts that the endpoint was not requested.
@@ -237,8 +211,32 @@ public class EndpointStub {
         return true
     }
 
+    fileprivate func response(for request: URLRequest) -> EndpointSampleResponse {
+        handler(request)
+    }
+
     fileprivate func record(request: URLRequest) {
         recordedRequests.append(request)
+    }
+}
+
+extension MoyaIntegrationTester: PluginType {
+    /// Implementation of `Moya.PluginType`. You should not not call this method yourself.
+    public func willSend(_ request: RequestType, target: TargetType) {
+        guard
+            let urlRequest = request.request,
+            let url = urlRequest.url,
+            let httpMethod = urlRequest.httpMethod
+        else {
+            return
+        }
+
+        guard let stub = self.stub(for: url.absoluteString, httpMethod: httpMethod) else {
+            XCTFail("Unexpected request for \(httpMethod) \(url)")
+            return
+        }
+
+        stub.record(request: urlRequest)
     }
 }
 

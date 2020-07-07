@@ -129,11 +129,9 @@ final class MoyaIntegrationTesterTests: InterceptingTestCase {
     func test_endpointClosure_returnsNetworkError() throws {
         let simulatedError = NSError(domain: NSURLErrorDomain, code: NSURLErrorCannotFindHost, userInfo: nil)
 
-        try tester.stub(
-            "https://example.com/users",
-            method: "GET",
-            networkError: simulatedError
-        )
+        try tester.stub("https://example.com/users", method: "GET") { _ in
+            .networkError(simulatedError)
+        }
 
         let target = MoyaTarget(
            baseURL: URL(string: "https://example.com")!,
